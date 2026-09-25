@@ -83,11 +83,14 @@ def record_generation() -> None:
 # tone, aur structure control hota hai. Baaki sab sirf UI/plumbing hai.
 # ---------------------------------------------------------------------------
 
-def build_explanation_prompt(topic: str) -> str:
+def build_explanation_prompt(topic: str, language: str = "English") -> str:
     """
-    Urdu mein simple, saaf, student-friendly explanation ke liye prompt.
+    Simple, saaf, student-friendly explanation ke liye prompt.
+    `language` "English" (default — school teachers ki demand par) ya
+    "Urdu" ho sakta hai — output usi zaban mein aata hai.
     """
-    return f"""Aap ek tajurbakar Urdu-medium teacher hain jo mushkil topics ko
+    if language == "Urdu":
+        return f"""Aap ek tajurbakar Urdu-medium teacher hain jo mushkil topics ko
 aasan aur rozmarra ki misalon se samjhate hain.
 
 Topic: "{topic}"
@@ -103,6 +106,23 @@ Neeche di gayi requirements ke mutabiq is topic ki explanation likhein:
 7. Total length: taqreeban 250-400 alfaz.
 
 Sirf explanation likhein, koi extra heading ya meta-commentary nahi."""
+
+    return f"""You are an experienced teacher who explains difficult topics
+in simple, everyday language for students.
+
+Topic: "{topic}"
+
+Write an explanation of this topic following these requirements:
+
+1. Write only in clear, simple English — no jargon without explanation.
+2. Start with a short intro on why this topic matters.
+3. Explain the core concept in 3-5 short paragraphs.
+4. Include at least one real-life example.
+5. Avoid difficult words; where needed, give a simple definition.
+6. End with a 2-3 sentence summary.
+7. Total length: approximately 250-400 words.
+
+Write only the explanation, no extra heading or meta-commentary."""
 
 
 def build_quiz_prompt(topic: str, explanation: str = "") -> str:
@@ -248,13 +268,18 @@ def call_claude(api_key: str, prompt: str) -> str:
 def main():
     st.set_page_config(page_title="Lesson Assistant", page_icon="📘", layout="centered")
     st.title("📘 Lesson Assistant — Phase 1")
-    st.caption("Topic do → Urdu explanation + Quiz + optional NTS test + YouTube script")
+    st.caption("Topic do → English explanation (Urdu optional) + Quiz + optional NTS test + YouTube script")
 
     # ---- Sidebar: options (API key ab secrets se aati hai, user ko nahi dikhti) ----
     with st.sidebar:
         st.header("Settings")
         remaining = get_remaining_generations()
         st.metric("Aaj baaki generations", f"{remaining} / {DAILY_GENERATION_LIMIT}")
+        st.divider()
+        language = st.radio(
+            "Explanation ki zaban", ["English", "Urdu"], horizontal=True,
+            help="English default hai (school teachers ki demand par). Urdu optional hai.",
+        )
         st.divider()
         generate_script = st.checkbox("YouTube script bhi banao", value=False)
         generate_nts = st.checkbox("NTS-style test bhi banao (10 MCQs, English)", value=False)
@@ -293,14 +318,15 @@ def main():
             return
 
         # 1) Explanation
-        with st.spinner("Urdu explanation ban rahi hai..."):
+        with st.spinner(f"{language} explanation ban rahi hai..."):
             try:
-                explanation = call_claude(api_key, build_explanation_prompt(topic))
+                explanation = call_claude(api_key, build_explanation_prompt(topic, language))
             except Exception as e:
                 st.error(f"Explanation generate karte waqt error aaya: {e}")
                 return
 
         st.session_state["explanation"] = explanation
+        st.session_state["explanation_language"] = language
         st.session_state["topic"] = topic
 
         # 2) Quiz
@@ -341,7 +367,8 @@ def main():
 
     # ---- Display results ----
     if "explanation" in st.session_state:
-        st.subheader("📖 Urdu Explanation")
+        label = st.session_state.get("explanation_language", "English")
+        st.subheader(f"📖 {label} Explanation")
         st.markdown(st.session_state["explanation"])
 
         st.subheader("📝 Quiz")
